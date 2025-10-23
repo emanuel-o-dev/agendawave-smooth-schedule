@@ -21,6 +21,9 @@ const Auth = () => {
     
     // Simulação de autenticação
     if (email && password) {
+      // Salvar status de admin no localStorage
+      localStorage.setItem("isAdmin", isAdmin.toString());
+      
       toast({
         title: isLogin ? "Login realizado!" : "Conta criada!",
         description: `Bem-vindo${!isLogin && name ? `, ${name}` : ""}!`,

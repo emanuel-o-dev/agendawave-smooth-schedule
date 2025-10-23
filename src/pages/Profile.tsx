@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User as UserIcon, Mail, Clock, LogOut, Save } from "lucide-react";
+import { User as UserIcon, Mail, Clock, LogOut, Save, Plus, X, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,12 @@ const Profile = () => {
     workStart: "09:00",
     workEnd: "18:00",
   });
+  
+  const [services, setServices] = useState<string[]>([
+    "Corte de Cabelo",
+    "Barba",
+  ]);
+  const [newService, setNewService] = useState("");
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,11 +34,32 @@ const Profile = () => {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("isAdmin");
     toast({
       title: "Até logo!",
       description: "Você foi desconectado.",
     });
     navigate("/auth");
+  };
+
+  const handleAddService = () => {
+    if (newService.trim()) {
+      setServices([...services, newService.trim()]);
+      setNewService("");
+      toast({
+        title: "Serviço adicionado!",
+        description: `"${newService}" foi adicionado aos seus serviços.`,
+      });
+    }
+  };
+
+  const handleRemoveService = (index: number) => {
+    const removedService = services[index];
+    setServices(services.filter((_, i) => i !== index));
+    toast({
+      title: "Serviço removido",
+      description: `"${removedService}" foi removido.`,
+    });
   };
 
   return (
@@ -138,6 +165,53 @@ const Profile = () => {
               Salvar alterações
             </Button>
           </form>
+        </Card>
+
+        {/* Services Section */}
+        <Card className="p-6 border-border">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Briefcase className="w-5 h-5 text-primary" />
+              <Label className="text-base font-semibold">Serviços Oferecidos</Label>
+            </div>
+
+            {/* Services List */}
+            <div className="space-y-2">
+              {services.map((service, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border"
+                >
+                  <span className="text-sm font-medium">{service}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveService(index)}
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add Service */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nome do serviço"
+                value={newService}
+                onChange={(e) => setNewService(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleAddService()}
+                className="h-11 rounded-xl"
+              />
+              <Button
+                onClick={handleAddService}
+                className="h-11 px-4 rounded-xl"
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
         </Card>
 
         {/* Logout Button */}
