@@ -11,6 +11,7 @@ import NewAppointment from "./pages/NewAppointment";
 import CalendarView from "./pages/CalendarView";
 import Metrics from "./pages/Metrics";
 import Profile from "./pages/Profile";
+import PublicBooking from "./pages/PublicBooking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -18,12 +19,15 @@ const queryClient = new QueryClient();
 const AppContent = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === "/auth";
+  const isPublicBookingPage = location.pathname === "/agendar";
   const isAdmin = localStorage.getItem("isAdmin") === "true";
 
-  if (isAuthPage) {
+  // Páginas públicas sem sidebar
+  if (isAuthPage || isPublicBookingPage) {
     return (
       <Routes>
         <Route path="/auth" element={<Auth />} />
+        <Route path="/agendar" element={<PublicBooking />} />
       </Routes>
     );
   }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User as UserIcon, Mail, Clock, LogOut, Save, Plus, X, Briefcase } from "lucide-react";
+import { User as UserIcon, Mail, Clock, LogOut, Save, Plus, X, Briefcase, Link as LinkIcon, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +59,15 @@ const Profile = () => {
     toast({
       title: "Serviço removido",
       description: `"${removedService}" foi removido.`,
+    });
+  };
+
+  const handleCopyLink = () => {
+    const bookingLink = `${window.location.origin}/agendar`;
+    navigator.clipboard.writeText(bookingLink);
+    toast({
+      title: "Link copiado! 📋",
+      description: "Compartilhe com seus clientes.",
     });
   };
 
@@ -211,6 +220,39 @@ const Profile = () => {
                 <Plus className="w-5 h-5" />
               </Button>
             </div>
+          </div>
+        </Card>
+
+        {/* Public Booking Link */}
+        <Card className="p-6 border-border bg-primary/5">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <LinkIcon className="w-5 h-5 text-primary" />
+              <Label className="text-base font-semibold">Link de Agendamento</Label>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Compartilhe este link com seus clientes para que eles possam agendar diretamente
+            </p>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={`${window.location.origin}/agendar`}
+                className="h-11 rounded-xl bg-background"
+              />
+              <Button
+                onClick={handleCopyLink}
+                className="h-11 px-4 rounded-xl"
+              >
+                <Copy className="w-5 h-5" />
+              </Button>
+            </div>
+            <Button
+              onClick={() => window.open("/agendar", "_blank")}
+              variant="outline"
+              className="w-full h-11 rounded-xl"
+            >
+              Visualizar página de agendamento
+            </Button>
           </div>
         </Card>
 
