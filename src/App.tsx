@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/Layout/AppSidebar";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -17,28 +16,15 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const location = useLocation();
-  const isAuthPage = location.pathname === "/auth";
-  const isPublicBookingPage = location.pathname === "/agendar";
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
-
-  // Páginas públicas sem sidebar
-  if (isAuthPage || isPublicBookingPage) {
-    return (
-      <Routes>
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/agendar" element={<PublicBooking />} />
-      </Routes>
-    );
-  }
 
   return (
-    <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen flex w-full">
         <AppSidebar isAdmin={isAdmin} />
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<Navigate to="/auth" replace />} />
+            <Route path="/agendar" element={<PublicBooking />} />
+            <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/new-appointment" element={<NewAppointment />} />
             <Route path="/calendar" element={<CalendarView />} />
@@ -48,7 +34,6 @@ const AppContent = () => {
           </Routes>
         </main>
       </div>
-    </SidebarProvider>
   );
 };
 
