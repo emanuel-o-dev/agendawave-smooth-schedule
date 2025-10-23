@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
+   const isAdmin = localStorage.getItem("isAdmin") === "true";
 
   return (
       <div className="min-h-screen flex w-full">
