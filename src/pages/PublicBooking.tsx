@@ -77,15 +77,58 @@ const PublicBooking = () => {
     "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
     try {
       bookingSchema.parse(formData);
       
-      // Simular envio do agendamento
-      console.log("Agendamento:", formData);
+      // Get service details to get user_id
+      const { data: service, error: serviceError } = await supabase
+        .from("services")
+        .select("user_id")
+        .eq("id", formData.service)
+        .single();
+
+      if (serviceError || !service) {
+        toast({
+          title: "Erro",
+          description: "Serviço não encontrado.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Create appointment
+      const { error: appointmentError } = await supabase
+        .from("appointments")
+        .insert({
+          user_id: service.user_id,
+          service_id: formData.service,
+          client_name: formData.name,
+          client_contact: formData.phone,
+          appointment_date: formData.date,
+          appointment_time: formData.time,
+          status: "pending",
+        });
+
+      if (appointmentError) {
+        if (appointmentError.code === "23505") {
+          toast({
+            title: "Horário indisponível",
+            description: "Este horário já está reservado. Por favor, escolha outro.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Erro ao criar agendamento",
+            description: appointmentError.message,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
       
       setIsSubmitted(true);
       toast({

@@ -1,77 +1,105 @@
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AppHeader from "@/components/Layout/AppHeader";
 import BottomNav from "@/components/Layout/BottomNav";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface Appointment {
+  id: string;
+  client_name: string;
+  appointment_time: string;
+  status: "confirmed" | "pending" | "cancelled" | "completed";
+  services: {
+    name: string;
+  };
+}
 
 interface DayAppointment {
   date: string;
-  appointments: Array<{
-    id: string;
-    clientName: string;
-    service: string;
-    time: string;
-    status: "confirmed" | "pending" | "cancelled";
-  }>;
+  appointments: Appointment[];
 }
 
 const CalendarView = () => {
-  const [currentWeek, setCurrentWeek] = useState(0);
+  const { user, userRole } = useAuth();
+  const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStart(new Date()));
+  const [weekData, setWeekData] = useState<DayAppointment[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data para a semana
-  const weekData: DayAppointment[] = [
-    {
-      date: "2025-10-20",
-      appointments: [
-        {
-          id: "1",
-          clientName: "Pedro Lima",
-          service: "Corte",
-          time: "10:00",
-          status: "confirmed",
-        },
-      ],
-    },
-    {
-      date: "2025-10-21",
-      appointments: [
-        {
-          id: "2",
-          clientName: "Julia Martins",
-          service: "Escova",
-          time: "14:00",
-          status: "pending",
-        },
-        {
-          id: "3",
-          clientName: "Carlos Eduardo",
-          service: "Barba",
-          time: "16:00",
-          status: "confirmed",
-        },
-      ],
-    },
-    {
-      date: "2025-10-22",
-      appointments: [],
-    },
-    {
-      date: "2025-10-23",
-      appointments: [
-        {
-          id: "4",
-          clientName: "Maria Silva",
-          service: "Corte",
-          time: "10:00",
-          status: "confirmed",
-        },
-      ],
-    },
-  ];
+  function getWeekStart(date: Date): Date {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day;
+    return new Date(d.setDate(diff));
+  }
 
-  const getStatusColor = (status: "confirmed" | "pending" | "cancelled") => {
+  function getWeekDates(startDate: Date): string[] {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      dates.push(date.toISOString().split("T")[0]);
+    }
+    return dates;
+  }
+
+  useEffect(() => {
+    if (user) {
+      loadWeekAppointments();
+    }
+  }, [user, currentWeekStart]);
+
+  const loadWeekAppointments = async () => {
+    setLoading(true);
+    const weekDates = getWeekDates(currentWeekStart);
+    const startDate = weekDates[0];
+    const endDate = weekDates[6];
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .select(`
+        id,
+        client_name,
+        appointment_date,
+        appointment_time,
+        status,
+        services (
+          name
+        )
+      `)
+      .gte("appointment_date", startDate)
+      .lte("appointment_date", endDate)
+      .order("appointment_date", { ascending: true })
+      .order("appointment_time", { ascending: true });
+
+    if (error) {
+      console.error("Error loading appointments:", error);
+      setLoading(false);
+      return;
+    }
+
+    // Group appointments by date
+    const groupedData: DayAppointment[] = weekDates.map((date) => ({
+      date,
+      appointments: (data || [])
+        .filter((apt: any) => apt.appointment_date === date)
+        .map((apt: any) => ({
+          id: apt.id,
+          client_name: apt.client_name,
+          appointment_time: apt.appointment_time,
+          status: apt.status,
+          services: apt.services,
+        })),
+    }));
+
+    setWeekData(groupedData);
+    setLoading(false);
+  };
+
+  const getStatusColor = (status: "confirmed" | "pending" | "cancelled" | "completed") => {
     switch (status) {
       case "confirmed":
         return "bg-green-100 text-green-700 hover:bg-green-100";
@@ -79,10 +107,12 @@ const CalendarView = () => {
         return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100";
       case "cancelled":
         return "bg-red-100 text-red-700 hover:bg-red-100";
+      case "completed":
+        return "bg-blue-100 text-blue-700 hover:bg-blue-100";
     }
   };
 
-  const getStatusLabel = (status: "confirmed" | "pending" | "cancelled") => {
+  const getStatusLabel = (status: "confirmed" | "pending" | "cancelled" | "completed") => {
     switch (status) {
       case "confirmed":
         return "Confirmado";
@@ -90,13 +120,16 @@ const CalendarView = () => {
         return "Pendente";
       case "cancelled":
         return "Cancelado";
+      case "completed":
+        return "Concluído";
     }
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + "T00:00:00");
     const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
+    today.setHours(0, 0, 0, 0);
+    const isToday = date.getTime() === today.getTime();
 
     return {
       dayName: date.toLocaleDateString("pt-BR", { weekday: "short" }),
@@ -104,6 +137,28 @@ const CalendarView = () => {
       isToday,
     };
   };
+
+  const formatWeekRange = () => {
+    const start = new Date(currentWeekStart);
+    const end = new Date(currentWeekStart);
+    end.setDate(end.getDate() + 6);
+
+    return `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString("pt-BR", { month: "short" })}, ${end.getFullYear()}`;
+  };
+
+  const navigateWeek = (direction: number) => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + direction * 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted pb-20">
@@ -115,20 +170,20 @@ const CalendarView = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCurrentWeek(currentWeek - 1)}
+            onClick={() => navigateWeek(-1)}
             className="rounded-lg"
           >
             <ChevronLeft className="w-5 h-5" />
           </Button>
 
           <span className="text-sm font-semibold text-foreground">
-            20 - 26 Out, 2025
+            {formatWeekRange()}
           </span>
 
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCurrentWeek(currentWeek + 1)}
+            onClick={() => navigateWeek(1)}
             className="rounded-lg"
           >
             <ChevronRight className="w-5 h-5" />
@@ -174,7 +229,7 @@ const CalendarView = () => {
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-muted-foreground" />
                             <span className="text-sm font-semibold text-foreground">
-                              {appointment.time}
+                              {appointment.appointment_time.slice(0, 5)}
                             </span>
                           </div>
                           <Badge
@@ -185,10 +240,10 @@ const CalendarView = () => {
                           </Badge>
                         </div>
                         <p className="font-medium text-foreground">
-                          {appointment.clientName}
+                          {appointment.client_name}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {appointment.service}
+                          {appointment.services.name}
                         </p>
                       </Card>
                     ))}
@@ -206,7 +261,7 @@ const CalendarView = () => {
         </div>
       </div>
 
-      <BottomNav isAdmin={false} />
+      <BottomNav isAdmin={userRole === "admin"} />
     </div>
   );
 };

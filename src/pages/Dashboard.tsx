@@ -1,48 +1,65 @@
-import { Plus, Clock, User as UserIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Clock, User as UserIcon, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AppHeader from "@/components/Layout/AppHeader";
 import BottomNav from "@/components/Layout/BottomNav";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Appointment {
   id: string;
-  clientName: string;
-  service: string;
-  date: string;
-  time: string;
-  status: "confirmed" | "pending" | "cancelled";
+  client_name: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: "confirmed" | "pending" | "cancelled" | "completed";
+  services: {
+    name: string;
+  };
 }
 
 const Dashboard = () => {
-  // Mock data - será substituído por dados reais do backend
-  const appointments: Appointment[] = [
-    {
-      id: "1",
-      clientName: "Maria Silva",
-      service: "Corte de Cabelo",
-      date: "2025-10-23",
-      time: "10:00",
-      status: "confirmed",
-    },
-    {
-      id: "2",
-      clientName: "João Santos",
-      service: "Barba",
-      date: "2025-10-23",
-      time: "14:30",
-      status: "pending",
-    },
-    {
-      id: "3",
-      clientName: "Ana Costa",
-      service: "Manicure",
-      date: "2025-10-24",
-      time: "09:00",
-      status: "confirmed",
-    },
-  ];
+  const { user, userRole } = useAuth();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      loadAppointments();
+    }
+  }, [user]);
+
+  const loadAppointments = async () => {
+    const today = new Date().toISOString().split("T")[0];
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .select(`
+        id,
+        client_name,
+        appointment_date,
+        appointment_time,
+        status,
+        services (
+          name
+        )
+      `)
+      .gte("appointment_date", today)
+      .order("appointment_date", { ascending: true })
+      .order("appointment_time", { ascending: true })
+      .limit(10);
+
+    if (error) {
+      console.error("Error loading appointments:", error);
+      setLoading(false);
+      return;
+    }
+
+    setAppointments(data || []);
+    setLoading(false);
+  };
 
   const getStatusColor = (status: Appointment["status"]) => {
     switch (status) {
@@ -52,6 +69,8 @@ const Dashboard = () => {
         return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100";
       case "cancelled":
         return "bg-red-100 text-red-700 hover:bg-red-100";
+      case "completed":
+        return "bg-blue-100 text-blue-700 hover:bg-blue-100";
     }
   };
 
@@ -63,16 +82,26 @@ const Dashboard = () => {
         return "Pendente";
       case "cancelled":
         return "Cancelado";
+      case "completed":
+        return "Concluído";
     }
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + "T00:00:00");
     return date.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "short",
     });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted pb-20">
@@ -112,10 +141,10 @@ const Dashboard = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-foreground">
-                        {appointment.clientName}
+                        {appointment.client_name}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {appointment.service}
+                        {appointment.services.name}
                       </p>
                     </div>
                   </div>
@@ -130,11 +159,11 @@ const Dashboard = () => {
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    <span>{appointment.time}</span>
+                    <span>{appointment.appointment_time.slice(0, 5)}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>•</span>
-                    <span>{formatDate(appointment.date)}</span>
+                    <span>{formatDate(appointment.appointment_date)}</span>
                   </div>
                 </div>
               </Card>
@@ -142,7 +171,7 @@ const Dashboard = () => {
           ) : (
             <Card className="p-8 text-center border-border">
               <p className="text-muted-foreground">
-                Nenhum agendamento para hoje
+                Nenhum agendamento próximo
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Comece criando um novo agendamento
@@ -152,7 +181,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <BottomNav isAdmin={false} />
+      <BottomNav isAdmin={userRole === "admin"} />
     </div>
   );
 };

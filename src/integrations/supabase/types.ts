@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          appointment_date: string
+          appointment_time: string
+          client_contact: string
+          client_name: string
+          created_at: string
+          id: string
+          notes: string | null
+          service_id: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          appointment_date: string
+          appointment_time: string
+          client_contact: string
+          client_name: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          service_id: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          appointment_date?: string
+          appointment_time?: string
+          client_contact?: string
+          client_name?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          service_id?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           available_hours: string | null
@@ -113,6 +163,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "prestador"
+      appointment_status: "pending" | "confirmed" | "cancelled" | "completed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -241,6 +292,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "prestador"],
+      appointment_status: ["pending", "confirmed", "cancelled", "completed"],
     },
   },
 } as const
