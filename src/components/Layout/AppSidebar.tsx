@@ -13,7 +13,6 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 
 interface AppSidebarProps {
@@ -30,15 +29,11 @@ const menuItems = [
 export function AppSidebar({ isAdmin }: AppSidebarProps) {
   const { state } = useSidebar();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const collapsed = state === "collapsed";
 
-  const handleLogout = () => {
-    localStorage.removeItem("isAdmin");
-    toast({
-      title: "Até logo!",
-      description: "Você foi desconectado.",
-    });
+  const handleLogout = async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    await supabase.auth.signOut();
     navigate("/auth");
   };
 

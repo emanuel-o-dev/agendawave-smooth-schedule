@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, Clock, User, Phone, Briefcase, CheckCircle2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,9 +23,18 @@ const bookingSchema = z.object({
   time: z.string().min(1, "Selecione um horário"),
 });
 
+interface Service {
+  id: string;
+  name: string;
+  description: string | null;
+  duration: number;
+  price: number | null;
+}
+
 const PublicBooking = () => {
   const { toast } = useToast();
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -33,15 +43,33 @@ const PublicBooking = () => {
     time: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableServices, setAvailableServices] = useState<Service[]>([]);
 
-  // Serviços simulados - viriam do backend/perfil do profissional
-  const availableServices = [
-    "Corte de Cabelo",
-    "Barba",
-    "Coloração",
-    "Manicure",
-    "Pedicure",
-  ];
+  useEffect(() => {
+    loadServices();
+  }, []);
+
+  const loadServices = async () => {
+    const { data, error } = await supabase
+      .from("services")
+      .select("*")
+      .eq("active", true)
+      .order("name");
+
+    if (error) {
+      console.error("Error loading services:", error);
+      toast({
+        title: "Erro ao carregar serviços",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    setAvailableServices(data || []);
+    setLoading(false);
+  };
 
   // Horários disponíveis simulados
   const availableTimes = [
@@ -219,11 +247,28 @@ const PublicBooking = () => {
                     <SelectValue placeholder="Escolha um serviço" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border z-50">
-                    {availableServices.map((service) => (
-                      <SelectItem key={service} value={service}>
-                        {service}
+                    {loading ? (
+                      <SelectItem value="loading" disabled>
+                        Carregando serviços...
                       </SelectItem>
-                    ))}
+                    ) : availableServices.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        Nenhum serviço disponível
+                      </SelectItem>
+                    ) : (
+                      availableServices.map((service) => (
+                        <SelectItem key={service.id} value={service.id}>
+                          <div className="flex flex-col">
+                            <span>{service.name}</span>
+                            {service.price && (
+                              <span className="text-xs text-muted-foreground">
+                                R$ {service.price.toFixed(2)} • {service.duration} min
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

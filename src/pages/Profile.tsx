@@ -1,65 +1,183 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User as UserIcon, Mail, Clock, LogOut, Save, Plus, X, Briefcase, Link as LinkIcon, Copy } from "lucide-react";
+import { User as UserIcon, Mail, Clock, LogOut, Save, Plus, X, Briefcase, Link as LinkIcon, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import AppHeader from "@/components/Layout/AppHeader";
 import BottomNav from "@/components/Layout/BottomNav";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface Service {
+  id: string;
+  name: string;
+  description: string | null;
+  duration: number;
+  price: number | null;
+  active: boolean;
+}
 
 const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, userRole, signOut } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
-    name: "João Silva",
-    email: "joao@email.com",
+    name: "",
+    email: "",
     workStart: "09:00",
     workEnd: "18:00",
   });
   
-  const [services, setServices] = useState<string[]>([
-    "Corte de Cabelo",
-    "Barba",
-  ]);
-  const [newService, setNewService] = useState("");
+  const [services, setServices] = useState<Service[]>([]);
+  const [newService, setNewService] = useState({
+    name: "",
+    description: "",
+    duration: "30",
+    price: "",
+  });
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      loadProfile();
+      if (userRole === "prestador") {
+        loadServices();
+      }
+    }
+  }, [user, userRole]);
+
+  const loadProfile = async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user?.id)
+      .single();
+
+    if (error) {
+      console.error("Error loading profile:", error);
+      setLoading(false);
+      return;
+    }
+
+    if (data) {
+      setFormData({
+        name: data.name || "",
+        email: data.email || "",
+        workStart: data.available_hours?.split(" - ")[0] || "09:00",
+        workEnd: data.available_hours?.split(" - ")[1] || "18:00",
+      });
+    }
+
+    setLoading(false);
+  };
+
+  const loadServices = async () => {
+    const { data, error } = await supabase
+      .from("services")
+      .select("*")
+      .eq("user_id", user?.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading services:", error);
+      return;
+    }
+
+    setServices(data || []);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+    
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        name: formData.name,
+        available_hours: `${formData.workStart} - ${formData.workEnd}`,
+      })
+      .eq("id", user?.id);
+
+    setSaving(false);
+
+    if (error) {
+      toast({
+        title: "Erro ao salvar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     toast({
       title: "Perfil atualizado!",
       description: "Suas informações foram salvas com sucesso.",
     });
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("isAdmin");
-    toast({
-      title: "Até logo!",
-      description: "Você foi desconectado.",
-    });
+  const handleLogout = async () => {
+    await signOut();
     navigate("/auth");
   };
 
-  const handleAddService = () => {
-    if (newService.trim()) {
-      setServices([...services, newService.trim()]);
-      setNewService("");
-      toast({
-        title: "Serviço adicionado!",
-        description: `"${newService}" foi adicionado aos seus serviços.`,
+  const handleAddService = async () => {
+    if (!newService.name.trim()) return;
+
+    const { error } = await supabase
+      .from("services")
+      .insert({
+        user_id: user?.id,
+        name: newService.name.trim(),
+        description: newService.description.trim() || null,
+        duration: parseInt(newService.duration) || 30,
+        price: newService.price ? parseFloat(newService.price) : null,
+        active: true,
       });
+
+    if (error) {
+      toast({
+        title: "Erro ao adicionar serviço",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
     }
+
+    toast({
+      title: "Serviço adicionado!",
+      description: `"${newService.name}" foi adicionado aos seus serviços.`,
+    });
+
+    setNewService({ name: "", description: "", duration: "30", price: "" });
+    loadServices();
   };
 
-  const handleRemoveService = (index: number) => {
-    const removedService = services[index];
-    setServices(services.filter((_, i) => i !== index));
+  const handleRemoveService = async (serviceId: string, serviceName: string) => {
+    const { error } = await supabase
+      .from("services")
+      .delete()
+      .eq("id", serviceId);
+
+    if (error) {
+      toast({
+        title: "Erro ao remover serviço",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     toast({
       title: "Serviço removido",
-      description: `"${removedService}" foi removido.`,
+      description: `"${serviceName}" foi removido.`,
     });
+
+    loadServices();
   };
 
   const handleCopyLink = () => {
@@ -70,6 +188,14 @@ const Profile = () => {
       description: "Compartilhe com seus clientes.",
     });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted pb-20">
@@ -116,10 +242,8 @@ const Profile = () => {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  className="pl-10 h-12 rounded-xl"
+                  disabled
+                  className="pl-10 h-12 rounded-xl bg-muted"
                 />
               </div>
             </div>
@@ -168,93 +292,135 @@ const Profile = () => {
 
             <Button
               type="submit"
+              disabled={saving}
               className="w-full h-12 rounded-xl font-semibold shadow-primary hover:scale-[1.02] transition-all"
             >
-              <Save className="w-5 h-5 mr-2" />
+              {saving ? (
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-5 h-5 mr-2" />
+              )}
               Salvar alterações
             </Button>
           </form>
         </Card>
 
-        {/* Services Section */}
-        <Card className="p-6 border-border">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Briefcase className="w-5 h-5 text-primary" />
-              <Label className="text-base font-semibold">Serviços Oferecidos</Label>
-            </div>
+        {/* Services Section - Only for prestador */}
+        {userRole === "prestador" && (
+          <Card className="p-6 border-border">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Briefcase className="w-5 h-5 text-primary" />
+                <Label className="text-base font-semibold">Serviços Oferecidos</Label>
+              </div>
 
-            {/* Services List */}
-            <div className="space-y-2">
-              {services.map((service, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border"
-                >
-                  <span className="text-sm font-medium">{service}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveService(index)}
-                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+              {/* Services List */}
+              <div className="space-y-2">
+                {services.map((service) => (
+                  <div
+                    key={service.id}
+                    className="flex items-start justify-between p-3 rounded-xl bg-muted/50 border border-border"
                   >
-                    <X className="w-4 h-4" />
-                  </Button>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{service.name}</p>
+                      {service.description && (
+                        <p className="text-xs text-muted-foreground mt-1">{service.description}</p>
+                      )}
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                        <span>{service.duration} min</span>
+                        {service.price && <span>R$ {service.price.toFixed(2)}</span>}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveService(service.id, service.name)}
+                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Service */}
+              <div className="space-y-3 pt-2 border-t">
+                <Input
+                  placeholder="Nome do serviço"
+                  value={newService.name}
+                  onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                  className="h-11 rounded-xl"
+                />
+                <Textarea
+                  placeholder="Descrição (opcional)"
+                  value={newService.description}
+                  onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                  className="rounded-xl resize-none"
+                  rows={2}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Duração (min)"
+                    value={newService.duration}
+                    onChange={(e) => setNewService({ ...newService, duration: e.target.value })}
+                    className="h-11 rounded-xl"
+                  />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="Preço (R$)"
+                    value={newService.price}
+                    onChange={(e) => setNewService({ ...newService, price: e.target.value })}
+                    className="h-11 rounded-xl"
+                  />
                 </div>
-              ))}
+                <Button
+                  onClick={handleAddService}
+                  className="w-full h-11 rounded-xl"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Adicionar Serviço
+                </Button>
+              </div>
             </div>
+          </Card>
+        )}
 
-            {/* Add Service */}
-            <div className="flex gap-2">
-              <Input
-                placeholder="Nome do serviço"
-                value={newService}
-                onChange={(e) => setNewService(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleAddService()}
-                className="h-11 rounded-xl"
-              />
+        {/* Public Booking Link - Only for prestador */}
+        {userRole === "prestador" && (
+          <Card className="p-6 border-border bg-primary/5">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <LinkIcon className="w-5 h-5 text-primary" />
+                <Label className="text-base font-semibold">Link de Agendamento</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Compartilhe este link com seus clientes para que eles possam agendar diretamente
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={`${window.location.origin}/agendar`}
+                  className="h-11 rounded-xl bg-background"
+                />
+                <Button
+                  onClick={handleCopyLink}
+                  className="h-11 px-4 rounded-xl"
+                >
+                  <Copy className="w-5 h-5" />
+                </Button>
+              </div>
               <Button
-                onClick={handleAddService}
-                className="h-11 px-4 rounded-xl"
+                onClick={() => window.open("/agendar", "_blank")}
+                variant="outline"
+                className="w-full h-11 rounded-xl"
               >
-                <Plus className="w-5 h-5" />
+                Visualizar página de agendamento
               </Button>
             </div>
-          </div>
-        </Card>
-
-        {/* Public Booking Link */}
-        <Card className="p-6 border-border bg-primary/5">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <LinkIcon className="w-5 h-5 text-primary" />
-              <Label className="text-base font-semibold">Link de Agendamento</Label>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Compartilhe este link com seus clientes para que eles possam agendar diretamente
-            </p>
-            <div className="flex gap-2">
-              <Input
-                readOnly
-                value={`${window.location.origin}/agendar`}
-                className="h-11 rounded-xl bg-background"
-              />
-              <Button
-                onClick={handleCopyLink}
-                className="h-11 px-4 rounded-xl"
-              >
-                <Copy className="w-5 h-5" />
-              </Button>
-            </div>
-            <Button
-              onClick={() => window.open("/agendar", "_blank")}
-              variant="outline"
-              className="w-full h-11 rounded-xl"
-            >
-              Visualizar página de agendamento
-            </Button>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Logout Button */}
         <Button
@@ -267,7 +433,7 @@ const Profile = () => {
         </Button>
       </div>
 
-      <BottomNav isAdmin={false} />
+      <BottomNav isAdmin={userRole === "admin"} />
     </div>
   );
 };

@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/Layout/AppSidebar";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import NewAppointment from "./pages/NewAppointment";
@@ -24,9 +25,9 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const location = useLocation();
+  const { user, userRole, loading } = useAuth();
   const isAuthPage = location.pathname === "/auth";
   const isPublicBookingPage = location.pathname === "/agendar";
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
 
   // Páginas públicas sem sidebar
   if (isAuthPage || isPublicBookingPage) {
@@ -38,13 +39,26 @@ const AppContent = () => {
     );
   }
 
+  // Redirect to auth if not logged in
+  if (!loading && !user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen flex w-full">
-        <AppSidebar isAdmin={isAdmin} />
+        <AppSidebar isAdmin={userRole === "admin"} />
         <main className="flex-1">
           <Routes>
-            <Route path="/" element={<Navigate to="/auth" replace />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/new-appointment" element={<NewAppointment />} />
             <Route path="/calendar" element={<CalendarView />} />
@@ -64,7 +78,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppContent />
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

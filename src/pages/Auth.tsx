@@ -1,43 +1,45 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Calendar, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<"admin" | "prestador">("prestador");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { signUp, signIn, user } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Simulação de autenticação
-    if (email && password) {
-      // Salvar status de admin no localStorage
-      localStorage.setItem("isAdmin", isAdmin.toString());
-      
-      toast({
-        title: isLogin ? "Login realizado!" : "Conta criada!",
-        description: `Bem-vindo${!isLogin && name ? `, ${name}` : ""}!`,
-      });
-      
-      // Redirecionar para dashboard
-      navigate("/dashboard");
-    } else {
-      toast({
-        title: "Erro",
-        description: "Preencha todos os campos",
-        variant: "destructive",
-      });
+    if (!email || !password || (!isLogin && !name)) {
+      return;
     }
+
+    setLoading(true);
+
+    if (isLogin) {
+      await signIn(email, password);
+    } else {
+      await signUp(email, password, name, role);
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -112,27 +114,34 @@ const Auth = () => {
               </div>
             </div>
 
-            {isLogin && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="admin"
-                  checked={isAdmin}
-                  onCheckedChange={(checked) => setIsAdmin(checked as boolean)}
-                />
-                <label
-                  htmlFor="admin"
-                  className="text-sm font-medium text-muted-foreground cursor-pointer"
-                >
-                  Login como administrador
-                </label>
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Tipo de conta
+                </Label>
+                <RadioGroup value={role} onValueChange={(value) => setRole(value as "admin" | "prestador")}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="prestador" id="prestador" />
+                    <Label htmlFor="prestador" className="font-normal cursor-pointer">
+                      Prestador de serviços
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="admin" id="admin" />
+                    <Label htmlFor="admin" className="font-normal cursor-pointer">
+                      Administrador
+                    </Label>
+                  </div>
+                </RadioGroup>
               </div>
             )}
 
             <Button
               type="submit"
+              disabled={loading}
               className="w-full h-12 rounded-xl font-semibold shadow-primary hover:shadow-lg hover:scale-[1.02] transition-all"
             >
-              {isLogin ? "Entrar" : "Criar conta"}
+              {loading ? "Carregando..." : isLogin ? "Entrar" : "Criar conta"}
             </Button>
           </form>
 
