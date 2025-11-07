@@ -1,4 +1,4 @@
-import { Home, Calendar as CalendarIcon, BarChart3, User, LogOut, Briefcase } from "lucide-react";
+import { Home, Calendar as CalendarIcon, BarChart3, User, LogOut, Briefcase, CalendarPlus } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   Sidebar,
@@ -22,6 +22,7 @@ interface AppSidebarProps {
 
 const menuItems = [
   { title: "Agendamentos", url: "/dashboard", icon: Home, adminOnly: false },
+  { title: "Novo Agendamento", url: "/new-appointment", icon: CalendarPlus, adminOnly: false },
   { title: "Calendário", url: "/calendar", icon: CalendarIcon, adminOnly: false },
   { title: "Serviços", url: "/services", icon: Briefcase, adminOnly: false, prestadorOnly: true },
   { title: "Métricas", url: "/metrics", icon: BarChart3, adminOnly: true },
