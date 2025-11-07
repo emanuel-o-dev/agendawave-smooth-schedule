@@ -1,4 +1,4 @@
-import { Home, Calendar as CalendarIcon, BarChart3, User, LogOut } from "lucide-react";
+import { Home, Calendar as CalendarIcon, BarChart3, User, LogOut, Briefcase } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   Sidebar,
@@ -17,16 +17,18 @@ import { Button } from "@/components/ui/button";
 
 interface AppSidebarProps {
   isAdmin: boolean;
+  isPrestador?: boolean;
 }
 
 const menuItems = [
   { title: "Agendamentos", url: "/dashboard", icon: Home, adminOnly: false },
   { title: "Calendário", url: "/calendar", icon: CalendarIcon, adminOnly: false },
+  { title: "Serviços", url: "/services", icon: Briefcase, adminOnly: false, prestadorOnly: true },
   { title: "Métricas", url: "/metrics", icon: BarChart3, adminOnly: true },
   { title: "Perfil", url: "/profile", icon: User, adminOnly: false },
 ];
 
-export function AppSidebar({ isAdmin }: AppSidebarProps) {
+export function AppSidebar({ isAdmin, isPrestador = false }: AppSidebarProps) {
   const { state } = useSidebar();
   const navigate = useNavigate();
   const collapsed = state === "collapsed";
@@ -40,7 +42,11 @@ export function AppSidebar({ isAdmin }: AppSidebarProps) {
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "";
 
-  const visibleItems = menuItems.filter(item => !item.adminOnly || isAdmin);
+  const visibleItems = menuItems.filter(item => {
+    if (item.adminOnly && !isAdmin) return false;
+    if ((item as any).prestadorOnly && !isPrestador && !isAdmin) return false;
+    return true;
+  });
 
   return (
     <Sidebar collapsible="icon">

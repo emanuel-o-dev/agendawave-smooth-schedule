@@ -18,6 +18,7 @@ import NewAppointment from "./pages/NewAppointment";
 import CalendarView from "./pages/CalendarView";
 import Metrics from "./pages/Metrics";
 import Profile from "./pages/Profile";
+import Services from "./pages/Services";
 import PublicBooking from "./pages/PublicBooking";
 import NotFound from "./pages/NotFound";
 
@@ -55,7 +56,10 @@ const AppContent = () => {
   return (
     <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen flex w-full">
-        <AppSidebar isAdmin={userRole === "admin"} />
+        <AppSidebar 
+          isAdmin={userRole === "admin"} 
+          isPrestador={userRole === "prestador"}
+        />
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -63,6 +67,7 @@ const AppContent = () => {
             <Route path="/new-appointment" element={<NewAppointment />} />
             <Route path="/calendar" element={<CalendarView />} />
             <Route path="/metrics" element={<Metrics />} />
+            <Route path="/services" element={<Services />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
