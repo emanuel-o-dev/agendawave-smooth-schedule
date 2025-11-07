@@ -21,6 +21,11 @@ interface Service {
   name: string;
   duration: number;
   price: number | null;
+  user_id: string;
+}
+
+interface Profile {
+  available_hours: string | null;
 }
 
 const NewAppointment = () => {
@@ -30,6 +35,7 @@ const NewAppointment = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [availableHours, setAvailableHours] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     clientName: "",
     clientContact: "",
@@ -66,6 +72,62 @@ const NewAppointment = () => {
     setServices(data || []);
     setLoading(false);
   };
+
+  const loadProviderHours = async (userId: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("available_hours")
+      .eq("id", userId)
+      .single();
+
+    if (error || !data?.available_hours) {
+      setAvailableHours([]);
+      return;
+    }
+
+    const hours = generateTimeSlots(data.available_hours);
+    setAvailableHours(hours);
+  };
+
+  const generateTimeSlots = (availableHours: string): string[] => {
+    const [start, end] = availableHours.split(" - ");
+    if (!start || !end) return [];
+
+    const slots: string[] = [];
+    const [startHour, startMin] = start.split(":").map(Number);
+    const [endHour, endMin] = end.split(":").map(Number);
+
+    let currentHour = startHour;
+    let currentMin = startMin;
+
+    while (
+      currentHour < endHour ||
+      (currentHour === endHour && currentMin < endMin)
+    ) {
+      slots.push(
+        `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`
+      );
+
+      currentMin += 30;
+      if (currentMin >= 60) {
+        currentMin = 0;
+        currentHour += 1;
+      }
+    }
+
+    return slots;
+  };
+
+  useEffect(() => {
+    if (formData.serviceId) {
+      const selectedService = services.find((s) => s.id === formData.serviceId);
+      if (selectedService) {
+        loadProviderHours(selectedService.user_id);
+      }
+    } else {
+      setAvailableHours([]);
+    }
+  }, [formData.serviceId, services]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,12 +273,19 @@ const NewAppointment = () => {
                   ) : (
                     services.map((service) => (
                       <SelectItem key={service.id} value={service.id}>
-                        <div className="flex flex-col">
-                          <span>{service.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {service.duration} min
-                            {service.price && ` • R$ ${service.price.toFixed(2)}`}
-                          </span>
+                        <div className="flex flex-col gap-1 py-1">
+                          <span className="font-medium text-base">{service.name}</span>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {service.duration} minutos
+                            </span>
+                            {service.price && (
+                              <span className="font-semibold text-primary">
+                                R$ {service.price.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </SelectItem>
                     ))
@@ -249,18 +318,30 @@ const NewAppointment = () => {
                 <Label htmlFor="time" className="text-sm font-medium">
                   Horário
                 </Label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="time"
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) =>
-                      setFormData({ ...formData, time: e.target.value })
-                    }
-                    className="pl-10 h-12 rounded-xl"
-                  />
-                </div>
+                <Select
+                  value={formData.time}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, time: value })
+                  }
+                  disabled={!formData.serviceId}
+                >
+                  <SelectTrigger className="h-12 rounded-xl">
+                    <SelectValue placeholder="Selecione o horário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableHours.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        Selecione um serviço primeiro
+                      </SelectItem>
+                    ) : (
+                      availableHours.map((hour) => (
+                        <SelectItem key={hour} value={hour}>
+                          {hour}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
