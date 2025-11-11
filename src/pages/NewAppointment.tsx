@@ -43,6 +43,7 @@ const NewAppointment = () => {
     date: "",
     time: "",
   });
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -104,9 +105,12 @@ const NewAppointment = () => {
       currentHour < endHour ||
       (currentHour === endHour && currentMin < endMin)
     ) {
-      slots.push(
-        `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`
-      );
+      const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+      
+      // Filtrar horários já ocupados
+      if (!bookedSlots.includes(timeSlot)) {
+        slots.push(timeSlot);
+      }
 
       currentMin += 30;
       if (currentMin >= 60) {
@@ -118,16 +122,54 @@ const NewAppointment = () => {
     return slots;
   };
 
+  const loadBookedSlots = async (providerId: string, date: string) => {
+    if (!date) {
+      setBookedSlots([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("appointment_time")
+      .eq("user_id", providerId)
+      .eq("appointment_date", date)
+      .in("status", ["confirmed", "pending"]);
+
+    if (error) {
+      console.error("Error loading booked slots:", error);
+      setBookedSlots([]);
+      return;
+    }
+
+    const bookedTimes = data?.map((apt) => apt.appointment_time) || [];
+    setBookedSlots(bookedTimes);
+  };
+
   useEffect(() => {
     if (formData.serviceId) {
       const selectedService = services.find((s) => s.id === formData.serviceId);
       if (selectedService) {
         loadProviderHours(selectedService.user_id);
+        if (formData.date) {
+          loadBookedSlots(selectedService.user_id, formData.date);
+        }
       }
     } else {
       setAvailableHours([]);
+      setBookedSlots([]);
     }
   }, [formData.serviceId, services]);
+
+  useEffect(() => {
+    if (formData.date && formData.serviceId) {
+      const selectedService = services.find((s) => s.id === formData.serviceId);
+      if (selectedService) {
+        loadBookedSlots(selectedService.user_id, formData.date);
+      }
+    } else {
+      setBookedSlots([]);
+    }
+  }, [formData.date, formData.serviceId, services]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,14 +360,19 @@ const NewAppointment = () => {
                 <Label htmlFor="time" className="text-sm font-medium">
                   Horário
                 </Label>
-                {formData.serviceId && availableHours.length === 0 && (
-                  <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mb-2">
-                    ⚠️ Nenhum horário disponível. Configure o horário de atendimento no perfil primeiro.
+                {formData.serviceId && !formData.date && (
+                  <p className="text-xs text-muted-foreground bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 mb-2">
+                    ℹ️ Selecione uma data primeiro para ver os horários disponíveis
                   </p>
                 )}
-                {formData.serviceId && availableHours.length > 0 && (
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Horários disponíveis baseados no perfil do prestador
+                {formData.serviceId && formData.date && availableHours.length === 0 && (
+                  <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mb-2">
+                    ⚠️ Nenhum horário disponível para esta data. Todos os horários estão ocupados ou o prestador ainda não configurou o horário de atendimento.
+                  </p>
+                )}
+                {formData.serviceId && formData.date && availableHours.length > 0 && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 mb-2">
+                    ✓ {availableHours.length} horário(s) disponível(is) para {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </p>
                 )}
                 <Select
@@ -333,10 +380,10 @@ const NewAppointment = () => {
                   onValueChange={(value) =>
                     setFormData({ ...formData, time: value })
                   }
-                  disabled={!formData.serviceId || availableHours.length === 0}
+                  disabled={!formData.serviceId || !formData.date || availableHours.length === 0}
                 >
                   <SelectTrigger className="h-12 rounded-xl">
-                    <SelectValue placeholder={!formData.serviceId ? "Selecione um serviço primeiro" : "Escolha o horário"} />
+                    <SelectValue placeholder={!formData.serviceId ? "Selecione um serviço primeiro" : !formData.date ? "Selecione uma data" : "Escolha o horário"} />
                   </SelectTrigger>
                   <SelectContent>
                     {availableHours.length === 0 ? (
