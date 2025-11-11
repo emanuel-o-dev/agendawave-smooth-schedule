@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User as UserIcon, Mail, Clock, LogOut, Save, Plus, X, Briefcase, Link as LinkIcon, Copy, Loader2 } from "lucide-react";
+import { User as UserIcon, Mail, LogOut, Save, Plus, X, Briefcase, Link as LinkIcon, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import AppHeader from "@/components/Layout/AppHeader";
 import BottomNav from "@/components/Layout/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { WeekSchedule } from "@/components/WeekSchedule";
 
 interface Service {
   id: string;
@@ -30,8 +31,6 @@ const Profile = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    workStart: "09:00",
-    workEnd: "18:00",
   });
   
   const [services, setServices] = useState<Service[]>([]);
@@ -68,8 +67,6 @@ const Profile = () => {
       setFormData({
         name: data.name || "",
         email: data.email || "",
-        workStart: data.available_hours?.split(" - ")[0] || "09:00",
-        workEnd: data.available_hours?.split(" - ")[1] || "18:00",
       });
     }
 
@@ -99,7 +96,6 @@ const Profile = () => {
       .from("profiles")
       .update({
         name: formData.name,
-        available_hours: `${formData.workStart} - ${formData.workEnd}`,
       })
       .eq("id", user?.id);
 
@@ -248,48 +244,6 @@ const Profile = () => {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">
-                Horário de atendimento
-              </Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="workStart" className="text-xs text-muted-foreground">
-                    Início
-                  </Label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="workStart"
-                      type="time"
-                      value={formData.workStart}
-                      onChange={(e) =>
-                        setFormData({ ...formData, workStart: e.target.value })
-                      }
-                      className="pl-9 h-11 rounded-xl text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="workEnd" className="text-xs text-muted-foreground">
-                    Fim
-                  </Label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="workEnd"
-                      type="time"
-                      value={formData.workEnd}
-                      onChange={(e) =>
-                        setFormData({ ...formData, workEnd: e.target.value })
-                      }
-                      className="pl-9 h-11 rounded-xl text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <Button
               type="submit"
               disabled={saving}
@@ -304,6 +258,11 @@ const Profile = () => {
             </Button>
           </form>
         </Card>
+
+        {/* Week Schedule - Only for prestador */}
+        {userRole === "prestador" && user && (
+          <WeekSchedule userId={user.id} />
+        )}
 
         {/* Services Section - Only for prestador */}
         {userRole === "prestador" && (

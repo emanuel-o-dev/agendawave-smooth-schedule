@@ -24,8 +24,11 @@ interface Service {
   user_id: string;
 }
 
-interface Profile {
-  available_hours: string | null;
+interface ProviderSchedule {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_active: boolean;
 }
 
 const NewAppointment = () => {
@@ -74,29 +77,39 @@ const NewAppointment = () => {
     setLoading(false);
   };
 
-  const loadProviderHours = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("available_hours")
-      .eq("id", userId)
-      .single();
-
-    if (error || !data?.available_hours) {
+  const loadProviderHours = async (userId: string, selectedDate: string) => {
+    if (!selectedDate) {
       setAvailableHours([]);
       return;
     }
 
-    const hours = generateTimeSlots(data.available_hours);
+    // Get day of week from selected date (0 = Sunday, 6 = Saturday)
+    const date = new Date(selectedDate + 'T00:00:00');
+    const dayOfWeek = date.getDay();
+
+    const { data, error } = await supabase
+      .from("provider_schedules")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("day_of_week", dayOfWeek)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (error || !data) {
+      setAvailableHours([]);
+      return;
+    }
+
+    const hours = generateTimeSlots(data.start_time, data.end_time);
     setAvailableHours(hours);
   };
 
-  const generateTimeSlots = (availableHours: string): string[] => {
-    const [start, end] = availableHours.split(" - ");
-    if (!start || !end) return [];
+  const generateTimeSlots = (startTime: string, endTime: string): string[] => {
+    if (!startTime || !endTime) return [];
 
     const slots: string[] = [];
-    const [startHour, startMin] = start.split(":").map(Number);
-    const [endHour, endMin] = end.split(":").map(Number);
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    const [endHour, endMin] = endTime.split(":").map(Number);
 
     let currentHour = startHour;
     let currentMin = startMin;
@@ -146,30 +159,18 @@ const NewAppointment = () => {
   };
 
   useEffect(() => {
-    if (formData.serviceId) {
+    if (formData.serviceId && formData.date) {
       const selectedService = services.find((s) => s.id === formData.serviceId);
       if (selectedService) {
-        loadProviderHours(selectedService.user_id);
-        if (formData.date) {
-          loadBookedSlots(selectedService.user_id, formData.date);
-        }
+        loadProviderHours(selectedService.user_id, formData.date);
+        loadBookedSlots(selectedService.user_id, formData.date);
       }
     } else {
       setAvailableHours([]);
       setBookedSlots([]);
     }
-  }, [formData.serviceId, services]);
+  }, [formData.serviceId, formData.date, services]);
 
-  useEffect(() => {
-    if (formData.date && formData.serviceId) {
-      const selectedService = services.find((s) => s.id === formData.serviceId);
-      if (selectedService) {
-        loadBookedSlots(selectedService.user_id, formData.date);
-      }
-    } else {
-      setBookedSlots([]);
-    }
-  }, [formData.date, formData.serviceId, services]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
