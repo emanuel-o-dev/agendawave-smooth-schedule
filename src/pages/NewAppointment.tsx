@@ -318,20 +318,30 @@ const NewAppointment = () => {
                 <Label htmlFor="time" className="text-sm font-medium">
                   Horário
                 </Label>
+                {formData.serviceId && availableHours.length === 0 && (
+                  <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mb-2">
+                    ⚠️ Nenhum horário disponível. Configure o horário de atendimento no perfil primeiro.
+                  </p>
+                )}
+                {formData.serviceId && availableHours.length > 0 && (
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Horários disponíveis baseados no perfil do prestador
+                  </p>
+                )}
                 <Select
                   value={formData.time}
                   onValueChange={(value) =>
                     setFormData({ ...formData, time: value })
                   }
-                  disabled={!formData.serviceId}
+                  disabled={!formData.serviceId || availableHours.length === 0}
                 >
                   <SelectTrigger className="h-12 rounded-xl">
-                    <SelectValue placeholder="Selecione o horário" />
+                    <SelectValue placeholder={!formData.serviceId ? "Selecione um serviço primeiro" : "Escolha o horário"} />
                   </SelectTrigger>
                   <SelectContent>
                     {availableHours.length === 0 ? (
                       <SelectItem value="none" disabled>
-                        Selecione um serviço primeiro
+                        Sem horários disponíveis
                       </SelectItem>
                     ) : (
                       availableHours.map((hour) => (
