@@ -12,6 +12,7 @@ import BottomNav from "@/components/Layout/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { WeekSchedule } from "@/components/WeekSchedule";
+import { ScheduleBlocks } from "@/components/ScheduleBlocks";
 
 interface Service {
   id: string;
@@ -262,6 +263,13 @@ const Profile = () => {
         {/* Week Schedule - Only for prestador */}
         {userRole === "prestador" && user && (
           <WeekSchedule userId={user.id} />
+        )}
+
+        {/* Schedule Blocks - Only for prestador */}
+        {userRole === "prestador" && user && (
+          <Card className="p-6 border-border">
+            <ScheduleBlocks />
+          </Card>
         )}
 
         {/* Services Section - Only for prestador */}

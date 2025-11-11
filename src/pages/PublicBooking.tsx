@@ -29,6 +29,14 @@ interface Service {
   description: string | null;
   duration: number;
   price: number | null;
+  user_id: string;
+}
+
+interface ScheduleBlock {
+  block_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  is_full_day: boolean;
 }
 
 const PublicBooking = () => {
@@ -44,6 +52,10 @@ const PublicBooking = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
+  const [availableHours, setAvailableHours] = useState<string[]>([]);
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<string[]>([]);
+  const [isFullDayBlocked, setIsFullDayBlocked] = useState(false);
 
   useEffect(() => {
     loadServices();
@@ -52,7 +64,7 @@ const PublicBooking = () => {
   const loadServices = async () => {
     const { data, error } = await supabase
       .from("services")
-      .select("*")
+      .select("id, name, description, duration, price, user_id")
       .eq("active", true)
       .order("name");
 
@@ -71,11 +83,162 @@ const PublicBooking = () => {
     setLoading(false);
   };
 
-  // Horários disponíveis simulados
-  const availableTimes = [
-    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-    "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
-  ];
+  const loadProviderHours = async (userId: string, selectedDate: string) => {
+    if (!selectedDate) {
+      setAvailableHours([]);
+      return;
+    }
+
+    const date = new Date(selectedDate + 'T00:00:00');
+    const dayOfWeek = date.getDay();
+
+    const { data, error } = await supabase
+      .from("provider_schedules")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("day_of_week", dayOfWeek)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (error || !data) {
+      setAvailableHours([]);
+      return;
+    }
+
+    const hours = generateTimeSlots(data.start_time, data.end_time);
+    setAvailableHours(hours);
+  };
+
+  const generateTimeSlots = (startTime: string, endTime: string): string[] => {
+    if (!startTime || !endTime) return [];
+
+    const slots: string[] = [];
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    const [endHour, endMin] = endTime.split(":").map(Number);
+
+    let currentHour = startHour;
+    let currentMin = startMin;
+
+    while (
+      currentHour < endHour ||
+      (currentHour === endHour && currentMin < endMin)
+    ) {
+      const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+      
+      if (!bookedSlots.includes(timeSlot) && !blockedSlots.includes(timeSlot)) {
+        slots.push(timeSlot);
+      }
+
+      currentMin += 30;
+      if (currentMin >= 60) {
+        currentMin = 0;
+        currentHour += 1;
+      }
+    }
+
+    return slots;
+  };
+
+  const loadScheduleBlocks = async (providerId: string, date: string) => {
+    if (!date) {
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+      return;
+    }
+
+    const { data, error } = await (supabase as any)
+      .from("schedule_blocks")
+      .select("*")
+      .eq("user_id", providerId)
+      .eq("block_date", date);
+
+    if (error) {
+      console.error("Error loading schedule blocks:", error);
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+      return;
+    }
+
+    const hasFullDayBlock = data.some((block: ScheduleBlock) => block.is_full_day);
+    setIsFullDayBlocked(hasFullDayBlock);
+
+    if (hasFullDayBlock) {
+      setBlockedSlots([]);
+      return;
+    }
+
+    const blocked: string[] = [];
+    data.forEach((block: ScheduleBlock) => {
+      if (!block.is_full_day && block.start_time && block.end_time) {
+        const [startHour, startMin] = block.start_time.split(":").map(Number);
+        const [endHour, endMin] = block.end_time.split(":").map(Number);
+        
+        let currentHour = startHour;
+        let currentMin = startMin;
+
+        while (
+          currentHour < endHour ||
+          (currentHour === endHour && currentMin < endMin)
+        ) {
+          const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+          blocked.push(timeSlot);
+
+          currentMin += 30;
+          if (currentMin >= 60) {
+            currentMin = 0;
+            currentHour += 1;
+          }
+        }
+      }
+    });
+
+    setBlockedSlots(blocked);
+  };
+
+  const loadBookedSlots = async (providerId: string, date: string) => {
+    if (!date) {
+      setBookedSlots([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("appointment_time")
+      .eq("user_id", providerId)
+      .eq("appointment_date", date)
+      .in("status", ["confirmed", "pending"]);
+
+    if (error) {
+      console.error("Error loading booked slots:", error);
+      setBookedSlots([]);
+      return;
+    }
+
+    const bookedTimes = data?.map((apt) => apt.appointment_time) || [];
+    setBookedSlots(bookedTimes);
+  };
+
+  useEffect(() => {
+    if (formData.service && formData.date) {
+      const selectedService = availableServices.find((s) => s.id === formData.service);
+      if (selectedService) {
+        loadProviderHours(selectedService.user_id, formData.date);
+        loadBookedSlots(selectedService.user_id, formData.date);
+        loadScheduleBlocks(selectedService.user_id, formData.date);
+      }
+    } else {
+      setAvailableHours([]);
+      setBookedSlots([]);
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+    }
+  }, [formData.service, formData.date, availableServices]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,6 +511,26 @@ const PublicBooking = () => {
                 <Label htmlFor="time" className="text-sm font-medium">
                   Horário
                 </Label>
+                {formData.service && !formData.date && (
+                  <p className="text-xs text-muted-foreground bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 mb-2">
+                    ℹ️ Selecione uma data primeiro para ver os horários disponíveis
+                  </p>
+                )}
+                {formData.service && formData.date && isFullDayBlocked && (
+                  <p className="text-xs text-muted-foreground bg-red-500/10 border border-red-500/20 rounded-lg p-2 mb-2">
+                    🚫 Esta data está bloqueada pelo prestador
+                  </p>
+                )}
+                {formData.service && formData.date && !isFullDayBlocked && availableHours.length === 0 && (
+                  <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mb-2">
+                    ⚠️ Nenhum horário disponível para esta data. Todos os horários estão ocupados ou o prestador ainda não configurou o horário de atendimento.
+                  </p>
+                )}
+                {formData.service && formData.date && !isFullDayBlocked && availableHours.length > 0 && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 mb-2">
+                    ✓ {availableHours.length} horário(s) disponível(is) para {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                )}
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground z-10" />
                   <Select
@@ -355,16 +538,23 @@ const PublicBooking = () => {
                     onValueChange={(value) =>
                       setFormData({ ...formData, time: value })
                     }
+                    disabled={!formData.service || !formData.date || availableHours.length === 0 || isFullDayBlocked}
                   >
                     <SelectTrigger className={`pl-10 h-12 rounded-xl ${errors.time ? 'border-destructive' : ''}`}>
-                      <SelectValue placeholder="Escolha o horário" />
+                      <SelectValue placeholder={!formData.service ? "Selecione um serviço primeiro" : !formData.date ? "Selecione uma data" : "Escolha o horário"} />
                     </SelectTrigger>
                     <SelectContent className="bg-card border-border z-50">
-                      {availableTimes.map((time) => (
-                        <SelectItem key={time} value={time}>
-                          {time}
+                      {availableHours.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          Sem horários disponíveis
                         </SelectItem>
-                      ))}
+                      ) : (
+                        availableHours.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

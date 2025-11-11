@@ -31,6 +31,13 @@ interface ProviderSchedule {
   is_active: boolean;
 }
 
+interface ScheduleBlock {
+  block_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  is_full_day: boolean;
+}
+
 const NewAppointment = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -47,6 +54,8 @@ const NewAppointment = () => {
     time: "",
   });
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<string[]>([]);
+  const [isFullDayBlocked, setIsFullDayBlocked] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -120,8 +129,8 @@ const NewAppointment = () => {
     ) {
       const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
       
-      // Filtrar horários já ocupados
-      if (!bookedSlots.includes(timeSlot)) {
+      // Filtrar horários já ocupados e bloqueados
+      if (!bookedSlots.includes(timeSlot) && !blockedSlots.includes(timeSlot)) {
         slots.push(timeSlot);
       }
 
@@ -133,6 +142,70 @@ const NewAppointment = () => {
     }
 
     return slots;
+  };
+
+  const loadScheduleBlocks = async (providerId: string, date: string) => {
+    if (!date) {
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+      return;
+    }
+
+    const { data, error } = await (supabase as any)
+      .from("schedule_blocks")
+      .select("*")
+      .eq("user_id", providerId)
+      .eq("block_date", date);
+
+    if (error) {
+      console.error("Error loading schedule blocks:", error);
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
+      return;
+    }
+
+    // Check if any block is full day
+    const hasFullDayBlock = data.some((block: ScheduleBlock) => block.is_full_day);
+    setIsFullDayBlocked(hasFullDayBlock);
+
+    if (hasFullDayBlock) {
+      setBlockedSlots([]);
+      return;
+    }
+
+    // Generate blocked time slots for partial blocks
+    const blocked: string[] = [];
+    data.forEach((block: ScheduleBlock) => {
+      if (!block.is_full_day && block.start_time && block.end_time) {
+        const [startHour, startMin] = block.start_time.split(":").map(Number);
+        const [endHour, endMin] = block.end_time.split(":").map(Number);
+        
+        let currentHour = startHour;
+        let currentMin = startMin;
+
+        while (
+          currentHour < endHour ||
+          (currentHour === endHour && currentMin < endMin)
+        ) {
+          const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+          blocked.push(timeSlot);
+
+          currentMin += 30;
+          if (currentMin >= 60) {
+            currentMin = 0;
+            currentHour += 1;
+          }
+        }
+      }
+    });
+
+    setBlockedSlots(blocked);
   };
 
   const loadBookedSlots = async (providerId: string, date: string) => {
@@ -164,10 +237,13 @@ const NewAppointment = () => {
       if (selectedService) {
         loadProviderHours(selectedService.user_id, formData.date);
         loadBookedSlots(selectedService.user_id, formData.date);
+        loadScheduleBlocks(selectedService.user_id, formData.date);
       }
     } else {
       setAvailableHours([]);
       setBookedSlots([]);
+      setBlockedSlots([]);
+      setIsFullDayBlocked(false);
     }
   }, [formData.serviceId, formData.date, services]);
 
@@ -366,12 +442,17 @@ const NewAppointment = () => {
                     ℹ️ Selecione uma data primeiro para ver os horários disponíveis
                   </p>
                 )}
-                {formData.serviceId && formData.date && availableHours.length === 0 && (
+                {formData.serviceId && formData.date && isFullDayBlocked && (
+                  <p className="text-xs text-muted-foreground bg-red-500/10 border border-red-500/20 rounded-lg p-2 mb-2">
+                    🚫 Esta data está bloqueada pelo prestador
+                  </p>
+                )}
+                {formData.serviceId && formData.date && !isFullDayBlocked && availableHours.length === 0 && (
                   <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mb-2">
                     ⚠️ Nenhum horário disponível para esta data. Todos os horários estão ocupados ou o prestador ainda não configurou o horário de atendimento.
                   </p>
                 )}
-                {formData.serviceId && formData.date && availableHours.length > 0 && (
+                {formData.serviceId && formData.date && !isFullDayBlocked && availableHours.length > 0 && (
                   <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 mb-2">
                     ✓ {availableHours.length} horário(s) disponível(is) para {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </p>
@@ -381,7 +462,7 @@ const NewAppointment = () => {
                   onValueChange={(value) =>
                     setFormData({ ...formData, time: value })
                   }
-                  disabled={!formData.serviceId || !formData.date || availableHours.length === 0}
+                  disabled={!formData.serviceId || !formData.date || availableHours.length === 0 || isFullDayBlocked}
                 >
                   <SelectTrigger className="h-12 rounded-xl">
                     <SelectValue placeholder={!formData.serviceId ? "Selecione um serviço primeiro" : !formData.date ? "Selecione uma data" : "Escolha o horário"} />
