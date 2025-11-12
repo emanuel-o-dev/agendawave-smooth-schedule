@@ -20,6 +20,7 @@ import Metrics from "./pages/Metrics";
 import Profile from "./pages/Profile";
 import Services from "./pages/Services";
 import PublicBooking from "./pages/PublicBooking";
+import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,11 +30,13 @@ const AppContent = () => {
   const { user, userRole, loading } = useAuth();
   const isAuthPage = location.pathname === "/auth";
   const isPublicBookingPage = location.pathname === "/agendar";
+  const isIndexPage = location.pathname === "/";
 
   // Páginas públicas sem sidebar
-  if (isAuthPage || isPublicBookingPage) {
+  if (isAuthPage || isPublicBookingPage || (isIndexPage && !user)) {
     return (
       <Routes>
+        <Route path="/" element={<Index />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/agendar" element={<PublicBooking />} />
       </Routes>

@@ -166,6 +166,23 @@ const Auth = () => {
             </button>
           </div>
         </div>
+
+        {/* Public Booking Link */}
+        <div className="mt-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
+          <div className="bg-card/50 backdrop-blur-sm rounded-xl p-4 border border-border/50">
+            <p className="text-sm text-muted-foreground mb-3">
+              Quer agendar um serviço?
+            </p>
+            <Button
+              onClick={() => navigate("/agendar")}
+              variant="outline"
+              className="w-full h-11 rounded-xl font-medium hover:scale-[1.02] transition-all"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Agendar sem login
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

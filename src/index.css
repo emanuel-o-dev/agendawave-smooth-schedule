@@ -112,6 +112,13 @@ All colors MUST be HSL.
     background: var(--gradient-secondary);
   }
 
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
   .shadow-primary {
     box-shadow: var(--shadow-primary);
   }
